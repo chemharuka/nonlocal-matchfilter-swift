@@ -243,10 +243,21 @@ final class DNGRawWriterTests: XCTestCase {
         XCTAssertEqual(offsets.count, 2)
         let original = try TIFFReader.readIFD(data, at: Int(offsets[0]))
         let alternate = try TIFFReader.readIFD(data, at: Int(offsets[1]))
-        // The decoded page is subfiletype 0; the alternate is 1 because two subfiletype-0 raws in
-        // `SubIFDs` make CIRAWFilter render the raw unfaithfully (see DNGRawWriter's documentation).
+        // Both pages are subfiletype 0 — order alone decides which one a decoder renders. Two
+        // subfiletype-0 raws stay faithful because the alternate repeats only sample-descriptive
+        // tags; see DNGRawWriter's documentation for the measurement.
         XCTAssertEqual(original[254]?.firstUInt32, 0, "SubIFDs[0] must be the page readers decode")
-        XCTAssertEqual(alternate[254]?.firstUInt32, 1, "SubIFDs[1] must not look like a second primary raw")
+        XCTAssertEqual(alternate[254]?.firstUInt32, 0, "the alternate is a raw page, not a preview")
+        // Profile/opcode tags describe the development, not the samples: repeating them on the
+        // alternate makes ImageIO apply the correction twice (measured, max|diff| 255).
+        for tag: UInt16 in [50721, 50722, 50728, 50938, 50939, 50981, 50982, 51022, 51041] {
+            XCTAssertNil(alternate[tag], "the alternate must not repeat profile tag \(tag)")
+        }
+        // The fixture's raw IFD carries only the CFA descriptors plus the levels, so that is what
+        // can be asserted here; a real capture's DefaultCrop/ActiveArea travel the same path.
+        for tag: UInt16 in [33421, 33422] {
+            XCTAssertNotNil(alternate[tag], "the alternate must describe its own samples: \(tag)")
+        }
         for page in [original, alternate] {
             XCTAssertEqual(page[262]?.firstUInt32, 32803)
             XCTAssertEqual(page[259]?.firstUInt32, 7)

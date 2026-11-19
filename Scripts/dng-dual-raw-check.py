@@ -13,7 +13,7 @@ What it asserts for a dual file:
      SubIFDs, not pages of the chain;
   2. `330 SubIFDs` holds exactly two entries, both CFA (`262 = 32803`) / lossless JPEG (`259 = 7`)
      at the source's geometry, the original at `[0]` (`NewSubfileType = 0`) and the denoised copy at
-     `[1]` (`NewSubfileType = 1`);
+     `[1]` (`NewSubfileType = 0`, sample-descriptive tags only);
   3. `SubIFDs[0]` decodes to the *source mosaic* with a maximum absolute difference of 0;
   4. `SubIFDs[1]` decodes to something different from the source, with the rms difference reported.
 
@@ -307,7 +307,7 @@ def main():
         original_ifd, _ = out.ifd(sub[0])
         alternate = out.ifd(sub[1])[0]
         check('subIFD0.newSubfileType', 0, out.scalar(original_ifd, 254))
-        check('subIFD1.newSubfileType', 1, out.scalar(alternate, 254))
+        check('subIFD1.newSubfileType', 0, out.scalar(alternate, 254))
         for name, page in (('subIFD0', original_ifd), ('subIFD1', alternate)):
             check(f'{name}.photometric', 32803, out.scalar(page, 262))
             check(f'{name}.compression', 7, out.scalar(page, 259))

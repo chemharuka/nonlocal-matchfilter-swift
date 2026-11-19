@@ -311,7 +311,7 @@ enum SOF3 {
 
         mutating func bit() -> Int {
             if bits == 0 {
-                let byte = bytes[index]
+                var byte = bytes[index]
                 index += 1
                 if byte == 0xFF {
                     index += 1                             // skip the stuffing byte
