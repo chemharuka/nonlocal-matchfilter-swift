@@ -45,11 +45,19 @@ public struct DenoiseRequest {
     /// Sample half the blocks on a checkerboard when estimating. Halves the
     /// measurement cost; see `NoiseEstimator.blockStats`.
     public var checkerboardNoise: Bool
+    /// Write both mosaics into one DNG: the untouched input as IFD0 and the
+    /// denoised result as the alternate image behind `330 SubIFDs`.
+    ///
+    /// Standard readers (ImageIO, `CIRAWFilter`, Lightroom) see IFD0, i.e. the
+    /// original — nothing about their behaviour changes, the denoised layer is
+    /// additive. Off by default so existing callers get exactly the file they
+    /// got before.
+    public var dualRaw: Bool
 
     public init(input: URL, output: URL, mlpackage: String,
                 a: [Double], b: [Double], strength: Double = 1.0,
                 crop: Int = 0, estimateNoise: Bool = false,
-                checkerboardNoise: Bool = false) {
+                checkerboardNoise: Bool = false, dualRaw: Bool = false) {
         self.input = input
         self.output = output
         self.mlpackage = mlpackage
@@ -59,6 +67,7 @@ public struct DenoiseRequest {
         self.crop = crop
         self.estimateNoise = estimateNoise
         self.checkerboardNoise = checkerboardNoise
+        self.dualRaw = dualRaw
     }
 }
 
@@ -77,6 +86,10 @@ public struct DenoiseReport: Sendable {
     public let seconds: Double
     public let outputBytes: Int
     public let writerTiles: Int
+    /// True when the output carries both the original (IFD0) and the denoised
+    /// (SubIFD) mosaic.
+    public let hasAlternate: Bool
+    public let alternateBytes: Int
 }
 
 public enum PipelineError: Error, CustomStringConvertible {
@@ -335,8 +348,22 @@ public enum DenoisePipeline {
         let writeStart = Date()
         let written: DNGRawWriter.Result
         do {
-            written = try DNGRawWriter.write(samples: quantized, width: width, height: height,
-                                             from: request.input, to: request.output)
+            if request.dualRaw {
+                // `decoded.samples` is the mosaic as quantised *before* denoising —
+                // not `mosaic` (float, normalised) and not a re-quantisation of it,
+                // so the primary layer round-trips the source samples exactly.
+                written = try DNGRawWriter.write(
+                    primary: DNGRawWriter.Layer(samples: decoded.samples),
+                    alternate: DNGRawWriter.Layer(
+                        samples: quantized,
+                        label: "denoised alternate: nlmf-denoise "
+                             + "strength=\(request.strength)"),
+                    width: width, height: height,
+                    from: request.input, to: request.output)
+            } else {
+                written = try DNGRawWriter.write(samples: quantized, width: width, height: height,
+                                                 from: request.input, to: request.output)
+            }
         } catch {
             throw PipelineError.write("\(error)")
         }
@@ -355,6 +382,8 @@ public enum DenoisePipeline {
             writeSeconds: writeSeconds,
             seconds: Date().timeIntervalSince(t0),
             outputBytes: written.byteCount,
-            writerTiles: written.tileCount)
+            writerTiles: written.tileCount,
+            hasAlternate: written.hasAlternate,
+            alternateBytes: written.alternateByteCount)
     }
 }

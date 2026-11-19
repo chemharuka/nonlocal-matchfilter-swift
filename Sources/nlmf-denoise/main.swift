@@ -4,7 +4,8 @@
 //  RawNIND raw->raw denoising on Core ML, DNG in and DNG out.
 //
 //  usage: nlmf-denoise <model.mlpackage> <in.dng> --out <out.dng>
-//                      [--a r,g,b,g2] [--b r,g,b,g2] [--strength S] [--json]
+//                      [--a r,g,b,g2] [--b r,g,b,g2] [--strength S] [--crop N]
+//                      [--dual-raw] [--json]
 //
 
 import Foundation
@@ -18,7 +19,7 @@ func die(_ msg: String) -> Never {
 let args = Array(CommandLine.arguments.dropFirst())
 guard args.count >= 2 else {
     die("usage: nlmf-denoise <model.mlpackage> <in.dng> --out <out.dng> "
-        + "[--a r,g,b,g2] [--b r,g,b,g2] [--strength S] [--json]")
+        + "[--a r,g,b,g2] [--b r,g,b,g2] [--strength S] [--crop N] [--dual-raw] [--json]")
 }
 
 func flag(_ name: String) -> String? {
@@ -48,6 +49,10 @@ let crop = flag("--crop").flatMap(Int.init) ?? 0
 let measureNoise = args.contains("--measure-noise")
 // With --measure-noise, --noise-sample=checkerboard halves the blocks it reads.
 let checkerboardNoise = flag("--noise-sample").map { $0 == "checkerboard" } ?? false
+/// Keep both mosaics in the output: the original as IFD0 and the denoised result
+/// as the alternate behind `330 SubIFDs`. Readers that do not know about the
+/// alternate see the original, unchanged.
+let dualRaw = args.contains("--dual-raw")
 let asJSON = args.contains("--json")
 
 let request = DenoiseRequest(
@@ -55,14 +60,15 @@ let request = DenoiseRequest(
     output: URL(fileURLWithPath: outPath),
     mlpackage: mlpackage,
     a: a, b: b, strength: strength, crop: crop,
-    estimateNoise: measureNoise, checkerboardNoise: checkerboardNoise)
+    estimateNoise: measureNoise, checkerboardNoise: checkerboardNoise,
+    dualRaw: dualRaw)
 
 do {
     let report = try DenoisePipeline.run(request) { line in
         if !asJSON { FileHandle.standardError.write(Data((line + "\n").utf8)) }
     }
     if asJSON {
-        let obj: [String: Any] = [
+        var obj: [String: Any] = [
             "width": report.width,
             "height": report.height,
             "cfa": report.cfa,
@@ -77,7 +83,12 @@ do {
             "seconds": report.seconds,
             "outputBytes": report.outputBytes,
             "writerTiles": report.writerTiles,
+            "hasAlternate": report.hasAlternate,
         ]
+        if report.hasAlternate {
+            obj["alternate"] = "denoised"
+            obj["alternateBytes"] = report.alternateBytes
+        }
         let data = try JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys])
         FileHandle.standardOutput.write(data)
         FileHandle.standardOutput.write(Data("\n".utf8))
