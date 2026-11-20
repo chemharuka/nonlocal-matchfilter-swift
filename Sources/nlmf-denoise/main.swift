@@ -41,7 +41,8 @@ let a = flag("--a").map(parseDoubles) ?? [0.0004, 0.0003, 0.0004, 0.0003]
 let b = flag("--b").map(parseDoubles) ?? [3e-6, 1e-6, 1e-6, 1e-6]
 guard a.count == 4, b.count == 4 else { die("--a and --b each need 4 values (R,G,B,G)") }
 
-let strength = flag("--strength").flatMap(Double.init) ?? 1.0
+// No `--strength` means "derive it from this frame's noise" (NLMFStrength).
+let strength = flag("--strength").flatMap(Double.init)
 let crop = flag("--crop").flatMap(Int.init) ?? 0
 // `--measure-noise` estimates the sensor's Poisson-Gaussian curve from this
 // frame and ignores --a/--b. Without it, or with explicit values, the CLI
@@ -94,7 +95,8 @@ do {
         FileHandle.standardOutput.write(Data("\n".utf8))
     } else {
         print("wrote \(outPath)  \(report.width)×\(report.height) \(report.cfa)")
-        print(String(format: "  read %.1f s, inference %.1f s, write %.1f s, total %.1f s",
+        print(String(format: "  strength %.2f (σ(0.05)=%.5f)  read %.1f s, inference %.1f s, write %.1f s, total %.1f s",
+                     report.strength, report.sigma,
                      report.readSeconds, report.inferenceSeconds,
                      report.writeSeconds, report.seconds))
         print("  \(report.tiles) tiles (\(report.tilesX)×\(report.tilesY)), "

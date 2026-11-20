@@ -19,11 +19,12 @@ public struct NLMFDenoiseOptions: Sendable, Equatable {
     public var modelURL: URL
     /// How much of the denoised result to keep: `out = in + s·(denoised − in)`.
     ///
-    /// 0.7 measured best on a high-ISO frame: at 1.0 the network smooths fine
-    /// texture on metal and foliage into a plastic surface. This is not the same
-    /// knob as the noise curve — sigma tells the network how much noise to
-    /// expect, strength only decides how much of its answer to keep.
-    public var strength: Double = 0.7
+    /// `nil` (default) derives it from the measured curve — see `NLMFStrength`.
+    /// One value cannot suit every ISO: at 1.0 the network smooths fine texture on
+    /// metal and foliage into a plastic surface, while a value low enough to keep
+    /// that texture leaves a high-ISO frame's grain half-removed, and half-removed
+    /// grain reads as detail. Set it explicitly only to override that.
+    public var strength: Double?
     /// Border to discard from each tile, in plane pixels (8 mosaic pixels).
     ///
     /// The network's tile edges are seams — it conditioned its answer on a
@@ -56,6 +57,10 @@ public struct NLMFDenoiseReport: Sendable, Equatable {
     public let height: Int
     public let cfa: String
     public let tiles: Int
+    /// Strength actually applied (the option, or the value derived from σ).
+    public let strength: Double
+    /// Green-plane σ at 5 % brightness behind that choice.
+    public let sigma: Double
     public let seconds: Double
     public let inferenceSeconds: Double
     public let outputBytes: Int
@@ -127,6 +132,8 @@ public struct NLMFDenoiseService: Sendable {
                 height: report.height,
                 cfa: report.cfa,
                 tiles: report.tiles,
+                strength: report.strength,
+                sigma: report.sigma,
                 seconds: report.seconds,
                 inferenceSeconds: report.inferenceSeconds,
                 outputBytes: report.outputBytes)

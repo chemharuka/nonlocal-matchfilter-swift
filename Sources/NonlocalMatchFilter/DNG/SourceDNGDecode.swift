@@ -92,22 +92,45 @@ extension SourceDNG {
         }
 
         if let stripOffsets = raw[273], let stripCounts = raw[279] {
-            guard compression == 1 else { throw DecodeError.unsupportedCompression(compression) }
+            // Strips used to be uncompressed-only. Leica also writes strip + SOF3
+            // (lossless JPEG) — three files in the sample set are exactly that,
+            // which is how this branch got here. Each strip carries its own SOF3
+            // header, so the decoder reads the real width/height from it.
+            let rowsPerStrip = raw[278]?.firstUInt32.map { Int($0) }
             var cursor = 0
             for i in 0..<min(stripOffsets.count, stripCounts.count) {
                 guard let offset = stripOffsets.uint32Array[safe: i],
                       let count = stripCounts.uint32Array[safe: i] else { break }
                 let start = Int(offset)
-                let available = min(Int(count), data.count - start)
+                guard start <= data.count else { throw DecodeError.truncatedTile(i) }
+                let end = min(start + Int(count), data.count)
+                let available = end - start
                 guard available > 0 else { throw DecodeError.truncatedTile(i) }
-                let rows = available / 2 / width
-                for r in 0..<rows where cursor < height {
-                    let base = start + r * width * 2
-                    for x in 0..<width {
-                        let lo = data[base + x * 2], hi = data[base + x * 2 + 1]
-                        samples[cursor * width + x] = UInt16(lo) | (UInt16(hi) << 8)
+
+                switch compression {
+                case 1:
+                    let rows = available / 2 / width
+                    for r in 0..<rows where cursor < height {
+                        let base = start + r * width * 2
+                        for x in 0..<width {
+                            let lo = data[base + x * 2], hi = data[base + x * 2 + 1]
+                            samples[cursor * width + x] = UInt16(lo) | (UInt16(hi) << 8)
+                        }
+                        cursor += 1
                     }
-                    cursor += 1
+                case 7:
+                    let blob = [UInt8](data[start..<end])
+                    let rows = min(rowsPerStrip ?? (height - cursor), height - cursor)
+                    let pixels = try SOF3.decode(blob, expectWidth: width, expectHeight: rows)
+                    let copy = min(rows, height - cursor)
+                    for r in 0..<copy {
+                        let src = r * width
+                        let dst = (cursor + r) * width
+                        for x in 0..<width { samples[dst + x] = pixels[src + x] }
+                    }
+                    cursor += copy
+                default:
+                    throw DecodeError.unsupportedCompression(compression)
                 }
             }
             return (samples, width, height)

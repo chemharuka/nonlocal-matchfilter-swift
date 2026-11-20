@@ -15,7 +15,7 @@ let request = DenoiseRequest(
     output: destinationURL,
     mlpackage: modelURL,          // v_matmul_256.mlpackage
     a: [], b: [],                 // ignored when estimateNoise is set
-    strength: 0.7,
+    strength: nil,                // nil = derive it from the measured noise
     crop: 4,
     estimateNoise: true)
 
@@ -111,8 +111,8 @@ on the dark region, as a ratio to the interior disagreement:
 | 8–16 px | 1.05× |
 
 So `crop` discards the unreliable border (in **plane** pixels; it discards twice
-as many mosaic pixels). At `crop: 4` the visible seam is largely gone at
-`strength: 0.7`.
+as many mosaic pixels). At `crop: 4` the visible seam is largely gone at the
+strengths this library picks on its own.
 
 Cropping is applied **only to interior seams**. The picture's own edge has no
 seam, and cropping there would leave those pixels with no tile at all — the bug
@@ -131,7 +131,20 @@ early implementation read the output array, which starts zeroed, so every
 strength below 1 dragged the whole frame toward black (overall std fell to 592
 where the source was 843).
 
-At high ISO, `0.7` reads best: `1.0` visibly over-smooths fine texture.
+`1.0` visibly over-smooths fine texture, so the default is not a constant at all:
+`strength: nil` derives it from the frame's own curve, via `NLMFStrength`.
+
+Anchors come from a scan of 190 Leica SL3 frames, ISO 800–3200, each fitted on
+its own. Medians of σ at 5 % brightness (green plane): 800 → 0.00355,
+1250 → 0.00465, 1600 → 0.00477, 2000 → 0.00569, 2500 → 0.00614, 3200 → 0.00680.
+Between the two end anchors it interpolates linearly in **log σ** and clamps
+outside them, so `strength` runs 0.70 (ISO 800 and quieter) to 0.90 (ISO 3200 and
+noisier) and never reaches 1.0. Keying on σ rather than on the ISO tag matters:
+within one ISO the spread is larger than between neighbouring ISOs — a bright
+ISO 3200 frame measures less noise than a dark ISO 800 one, and gets less
+strength for it. `DenoiseReport.strength` and `.sigma` say what was used.
+
+Pass an explicit `strength` only to override that.
 
 ## The models are in this repository
 

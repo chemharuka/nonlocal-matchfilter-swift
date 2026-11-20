@@ -56,6 +56,49 @@ public enum NoiseEstimateError: Error, CustomStringConvertible {
     }
 }
 
+/// How much of the network's answer to keep, as a function of how noisy the frame is.
+///
+/// The same `strength` cannot serve every ISO: 1.0 plastifies fine texture, but a
+/// low value leaves a high-ISO frame's grain half-removed, and that grain is what
+/// looks like detail. So the default is derived from the measured curve instead of
+/// being a constant.
+///
+/// Anchors come from a scan of 190 Leica SL3 frames, ISO 800–3200, each fitted on
+/// its own (`nlmf-lab --measure-only`). Medians of σ at 5 % brightness, green
+/// plane: 800 → 0.00355, 1250 → 0.00465, 1600 → 0.00477, 2000 → 0.00569,
+/// 2500 → 0.00614, 3200 → 0.00680.
+public enum NLMFStrength {
+
+    /// Brightness at which σ is compared — the same midtone point the estimator
+    /// reports, so the anchors above are directly usable.
+    public static let reference = 0.05
+
+    public static let sigmaLow = 0.00355
+    public static let sigmaHigh = 0.00680
+    public static let strengthLow = 0.70
+    public static let strengthHigh = 0.90
+
+    /// Linear in log σ between the anchors, clamped outside them.
+    ///
+    /// Logs because shot noise grows with ISO multiplicatively and the eye judges
+    /// grain by ratio, so a fixed σ step should move strength by a fixed amount.
+    /// Keying on σ rather than on the ISO tag is deliberate: a bright ISO 3200
+    /// frame measures less noise than a dark ISO 800 one, and it should be treated
+    /// as the quieter frame it is. The ceiling stays at 0.90 — 1.0 plastifies.
+    public static func strength(forSigma sigma: Double) -> Double {
+        guard sigma > 0, sigma.isFinite else { return strengthLow }
+        let t = (log(sigma) - log(sigmaLow)) / (log(sigmaHigh) - log(sigmaLow))
+        return strengthLow + (strengthHigh - strengthLow) * min(max(t, 0), 1)
+    }
+
+    /// `strength` for a resolved `Var = a·x + b`, green plane.
+    public static func strength(shot: [Double], read: [Double]) -> Double {
+        guard shot.count > 1, read.count > 1 else { return strengthLow }
+        let v = shot[1] * reference + read[1]
+        return strength(forSigma: v > 0 ? v.squareRoot() : 0)
+    }
+}
+
 public enum NoiseEstimator {
 
     /// Block edge in plane pixels. 32 gives 32×32 samples inside one CFA plane,

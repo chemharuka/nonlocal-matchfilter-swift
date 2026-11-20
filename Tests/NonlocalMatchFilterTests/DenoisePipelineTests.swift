@@ -215,3 +215,47 @@ final class BlendTests: XCTestCase {
         XCTAssertEqual(value, input)
     }
 }
+
+final class StrengthTests: XCTestCase {
+
+    /// The two anchors are ISO 800 / ISO 3200 medians from the scan, and the ends
+    /// of the strength range. If a constant moves, this test should move with it.
+    func testAnchorsMapToTheRangeEnds() {
+        XCTAssertEqual(NLMFStrength.strength(forSigma: NLMFStrength.sigmaLow), 0.70,
+                       accuracy: 1e-9)
+        XCTAssertEqual(NLMFStrength.strength(forSigma: NLMFStrength.sigmaHigh), 0.90,
+                       accuracy: 1e-9)
+    }
+
+    /// Outside the anchors it clamps rather than extrapolating: a cleaner frame than
+    /// ISO 800 stays at 0.70, and nothing ever reaches 1.0 (that plastifies texture).
+    func testClampsOutsideTheAnchors() {
+        XCTAssertEqual(NLMFStrength.strength(forSigma: 0.0005), 0.70, accuracy: 1e-9)
+        XCTAssertEqual(NLMFStrength.strength(forSigma: 0.05), 0.90, accuracy: 1e-9)
+        XCTAssertEqual(NLMFStrength.strength(forSigma: 0), 0.70, accuracy: 1e-9)
+        XCTAssertEqual(NLMFStrength.strength(forSigma: .nan), 0.70, accuracy: 1e-9)
+    }
+
+    /// Log-linear, so the geometric mean of the anchors lands at the midpoint.
+    func testGeometricMeanLandsAtTheMidpoint() {
+        let mid = (NLMFStrength.sigmaLow * NLMFStrength.sigmaHigh).squareRoot()
+        XCTAssertEqual(NLMFStrength.strength(forSigma: mid), 0.80, accuracy: 1e-9)
+    }
+
+    /// Monotone across the measured ISO ladder — the property the feature exists for.
+    func testMonotoneAcrossTheMeasuredLadder() {
+        let ladder = [0.00355, 0.00465, 0.00477, 0.00569, 0.00614, 0.00680]
+        let values = ladder.map { NLMFStrength.strength(forSigma: $0) }
+        XCTAssertEqual(values, values.sorted())
+        XCTAssertGreaterThan(values.last!, values.first!)
+    }
+
+    /// The convenience entry point agrees with the σ one.
+    func testStrengthFromCurveMatchesSigma() {
+        let shot = [6e-4, 6e-4, 4e-4, 5e-4]
+        let read = [3e-6, 3e-6, 1.5e-6, 3e-6]
+        let sigma = (shot[1] * NLMFStrength.reference + read[1]).squareRoot()
+        XCTAssertEqual(NLMFStrength.strength(shot: shot, read: read),
+                       NLMFStrength.strength(forSigma: sigma), accuracy: 1e-12)
+    }
+}

@@ -31,7 +31,11 @@ public struct DenoiseRequest {
     public var a: [Double]
     public var b: [Double]
     /// `out = in + strength·(denoised − in)` in the normalised domain.
-    public var strength: Double
+    ///
+    /// `nil` (the default) derives it from the frame's own curve via
+    /// `NLMFStrength` — the same value cannot suit ISO 800 and ISO 3200. The
+    /// report says which value was used.
+    public var strength: Double?
     /// Unreliable border to discard from each tile, in **plane** pixels.
     ///
     /// The network's edge pixels disagree with a differently-anchored grid
@@ -55,7 +59,7 @@ public struct DenoiseRequest {
     public var dualRaw: Bool
 
     public init(input: URL, output: URL, mlpackage: String,
-                a: [Double], b: [Double], strength: Double = 1.0,
+                a: [Double], b: [Double], strength: Double? = nil,
                 crop: Int = 0, estimateNoise: Bool = false,
                 checkerboardNoise: Bool = false, dualRaw: Bool = false) {
         self.input = input
@@ -85,6 +89,10 @@ public struct DenoiseReport: Sendable {
     public let writeSeconds: Double
     public let seconds: Double
     public let outputBytes: Int
+    /// Strength actually applied: the caller's, or the value `NLMFStrength` chose.
+    public let strength: Double
+    /// Green-plane σ at 5 % brightness that the strength was derived from.
+    public let sigma: Double
     public let writerTiles: Int
     /// True when the output carries both the original (IFD0) and the denoised
     /// (SubIFD) mosaic.
@@ -175,6 +183,14 @@ public enum DenoisePipeline {
                                  p, model.a[p], model.b[p], s, model.blocks[p]))
             }
         }
+
+        // The strength is decided here, once the curve is known: `nil` means "use
+        // the frame's own noise", which is the default.
+        let variance = shot[1] * NLMFStrength.reference + readNoise[1]
+        let sigma = variance > 0 ? variance.squareRoot() : 0
+        let strength = request.strength ?? NLMFStrength.strength(forSigma: sigma)
+        progress?(String(format: "strength %.2f (σ(0.05)=%.5f%@)", strength, sigma,
+                         request.strength == nil ? ", derived from the frame" : ""))
 
         // 4. denoise, tile by tile
         let den: CoreMLDenoiser
@@ -330,7 +346,7 @@ public enum DenoisePipeline {
         var out = [Float](repeating: 0, count: width * height)
         out.withUnsafeMutableBufferPointer { outPtr in
             mosaic.withUnsafeBufferPointer { mosaicPtr in
-                let s = Float(request.strength)
+                let s = Float(strength)
                 for i in 0..<n {
                     let w = wsum[i]
                     // No tile reached this pixel (only possible when `crop` pushes
@@ -382,6 +398,8 @@ public enum DenoisePipeline {
             writeSeconds: writeSeconds,
             seconds: Date().timeIntervalSince(t0),
             outputBytes: written.byteCount,
+            strength: strength,
+            sigma: sigma,
             writerTiles: written.tileCount,
             hasAlternate: written.hasAlternate,
             alternateBytes: written.alternateByteCount)
