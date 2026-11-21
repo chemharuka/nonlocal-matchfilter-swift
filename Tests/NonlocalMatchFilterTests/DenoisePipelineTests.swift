@@ -244,7 +244,8 @@ final class StrengthTests: XCTestCase {
 
     /// Monotone across the measured ISO ladder — the property the feature exists for.
     func testMonotoneAcrossTheMeasuredLadder() {
-        let ladder = [0.00355, 0.00465, 0.00477, 0.00569, 0.00614, 0.00680]
+        // Per-ISO medians from the 192-frame scan, in increasing order.
+        let ladder = [0.00369, 0.00494, 0.00505, 0.00624, 0.00661, 0.00721]
         let values = ladder.map { NLMFStrength.strength(forSigma: $0) }
         XCTAssertEqual(values, values.sorted())
         XCTAssertGreaterThan(values.last!, values.first!)

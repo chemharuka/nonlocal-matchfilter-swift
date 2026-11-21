@@ -142,9 +142,10 @@ where the source was 843).
 `1.0` visibly over-smooths fine texture, so the default is not a constant at all:
 `strength: nil` derives it from the frame's own curve, via `NLMFStrength`.
 
-Anchors come from a scan of 190 Leica SL3 frames, ISO 800–3200, each fitted on
-its own. Medians of σ at 5 % brightness (green plane): 800 → 0.00355,
-1250 → 0.00465, 1600 → 0.00477, 2000 → 0.00569, 2500 → 0.00614, 3200 → 0.00680.
+Anchors come from a scan of 192 Leica SL3 frames, ISO 800–3200, each fitted on
+its own with this estimator. Medians of σ at 5 % brightness (green plane):
+800 → 0.00369, 1000 → 0.00369, 1250 → 0.00505, 1600 → 0.00494, 2000 → 0.00624,
+2500 → 0.00661, 3200 → 0.00721.
 Between the two end anchors it interpolates linearly in **log σ** and clamps
 outside them, so `strength` runs 0.70 (ISO 800 and quieter) to 0.85 (ISO 3200 and
 noisier) and never reaches 1.0. The ceiling is 0.85 rather than 0.90 because the
