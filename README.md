@@ -146,8 +146,10 @@ Anchors come from a scan of 190 Leica SL3 frames, ISO 800–3200, each fitted on
 its own. Medians of σ at 5 % brightness (green plane): 800 → 0.00355,
 1250 → 0.00465, 1600 → 0.00477, 2000 → 0.00569, 2500 → 0.00614, 3200 → 0.00680.
 Between the two end anchors it interpolates linearly in **log σ** and clamps
-outside them, so `strength` runs 0.70 (ISO 800 and quieter) to 0.90 (ISO 3200 and
-noisier) and never reaches 1.0. Keying on σ rather than on the ISO tag matters:
+outside them, so `strength` runs 0.70 (ISO 800 and quieter) to 0.85 (ISO 3200 and
+noisier) and never reaches 1.0. The ceiling is 0.85 rather than 0.90 because the
+curve itself got stronger (15 % envelope, doubled read floor): the same frame now
+measures ~10 % more sigma and filters harder at a given strength. Keying on σ rather than on the ISO tag matters:
 within one ISO the spread is larger than between neighbouring ISOs — a bright
 ISO 3200 frame measures less noise than a dark ISO 800 one, and gets less
 strength for it. `DenoiseReport.strength` and `.sigma` say what was used.

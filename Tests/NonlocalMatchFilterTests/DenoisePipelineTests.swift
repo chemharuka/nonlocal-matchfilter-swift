@@ -223,7 +223,7 @@ final class StrengthTests: XCTestCase {
     func testAnchorsMapToTheRangeEnds() {
         XCTAssertEqual(NLMFStrength.strength(forSigma: NLMFStrength.sigmaLow), 0.70,
                        accuracy: 1e-9)
-        XCTAssertEqual(NLMFStrength.strength(forSigma: NLMFStrength.sigmaHigh), 0.90,
+        XCTAssertEqual(NLMFStrength.strength(forSigma: NLMFStrength.sigmaHigh), 0.85,
                        accuracy: 1e-9)
     }
 
@@ -231,7 +231,7 @@ final class StrengthTests: XCTestCase {
     /// ISO 800 stays at 0.70, and nothing ever reaches 1.0 (that plastifies texture).
     func testClampsOutsideTheAnchors() {
         XCTAssertEqual(NLMFStrength.strength(forSigma: 0.0005), 0.70, accuracy: 1e-9)
-        XCTAssertEqual(NLMFStrength.strength(forSigma: 0.05), 0.90, accuracy: 1e-9)
+        XCTAssertEqual(NLMFStrength.strength(forSigma: 0.05), 0.85, accuracy: 1e-9)
         XCTAssertEqual(NLMFStrength.strength(forSigma: 0), 0.70, accuracy: 1e-9)
         XCTAssertEqual(NLMFStrength.strength(forSigma: .nan), 0.70, accuracy: 1e-9)
     }
@@ -239,7 +239,7 @@ final class StrengthTests: XCTestCase {
     /// Log-linear, so the geometric mean of the anchors lands at the midpoint.
     func testGeometricMeanLandsAtTheMidpoint() {
         let mid = (NLMFStrength.sigmaLow * NLMFStrength.sigmaHigh).squareRoot()
-        XCTAssertEqual(NLMFStrength.strength(forSigma: mid), 0.80, accuracy: 1e-9)
+        XCTAssertEqual(NLMFStrength.strength(forSigma: mid), 0.775, accuracy: 1e-9)
     }
 
     /// Monotone across the measured ISO ladder — the property the feature exists for.
